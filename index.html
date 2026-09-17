@@ -1,0 +1,2359 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sellado de documentos médicos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<style>
+  :root{
+    --bg:#F4F6F5;
+    --surface:#FFFFFF;
+    --surface-2:#EEF2F0;
+    --ink:#17241F;
+    --muted:#5C6B66;
+    --border:#DCE3E0;
+    --accent:#0E6E5D;
+    --accent-ink:#FFFFFF;
+    --accent-soft:#E3F1EC;
+    --danger:#B3441E;
+    --danger-soft:#F6E7DF;
+    --canvas-shadow: 0 1px 0 rgba(23,36,31,0.06);
+    --font-serif:'Source Serif 4', Georgia, 'Times New Roman', serif;
+    --font-sans:'Inter', system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#101614;
+      --surface:#181F1C;
+      --surface-2:#1F2924;
+      --ink:#EAF2EE;
+      --muted:#93A29C;
+      --border:#2A3531;
+      --accent:#4BCDA9;
+      --accent-ink:#0A211B;
+      --accent-soft:#1E362F;
+      --danger:#E39468;
+      --danger-soft:#3A2A20;
+      --canvas-shadow: 0 1px 0 rgba(0,0,0,0.3);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#101614;
+    --surface:#181F1C;
+    --surface-2:#1F2924;
+    --ink:#EAF2EE;
+    --muted:#93A29C;
+    --border:#2A3531;
+    --accent:#4BCDA9;
+    --accent-ink:#0A211B;
+    --accent-soft:#1E362F;
+    --danger:#E39468;
+    --danger-soft:#3A2A20;
+    --canvas-shadow: 0 1px 0 rgba(0,0,0,0.3);
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-sans);
+    -webkit-font-smoothing:antialiased;
+    display:flex;
+    flex-direction:column;
+  }
+  button, input{ font-family:inherit; color:inherit; }
+  button{ cursor:pointer; }
+  button:focus-visible, input:focus-visible, a:focus-visible{
+    outline:2px solid var(--accent);
+    outline-offset:2px;
+  }
+
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    padding:14px 22px;
+    border-bottom:1px solid var(--border);
+    background:var(--surface);
+    flex-wrap:wrap;
+  }
+  .brand{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+  }
+  .brand-mark{
+    font-size:22px;
+    line-height:1;
+  }
+  .brand-title{
+    font-family:var(--font-serif);
+    font-size:19px;
+    font-weight:600;
+    letter-spacing:0.01em;
+  }
+  .brand-sub{
+    color:var(--muted);
+    font-size:13px;
+  }
+  .header-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:9px 16px;
+    border-radius:7px;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--ink);
+    font-size:14px;
+    font-weight:500;
+    transition:border-color .15s ease, background .15s ease;
+    white-space:nowrap;
+  }
+  .btn:hover{ border-color:var(--accent); }
+  .btn-primary{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:var(--accent-ink);
+  }
+  .btn-primary:hover{ filter:brightness(1.05); border-color:var(--accent); }
+  .btn-primary:disabled{
+    background:var(--surface-2);
+    border-color:var(--border);
+    color:var(--muted);
+    cursor:not-allowed;
+    filter:none;
+  }
+  .btn-ghost{
+    background:transparent;
+    border-color:transparent;
+  }
+  .btn-ghost:hover{ background:var(--surface-2); border-color:transparent; }
+  .btn-sm{ padding:6px 11px; font-size:13px; border-radius:6px; }
+  .btn-block{ width:100%; justify-content:center; }
+
+  main{
+    flex:1;
+    display:grid;
+    grid-template-columns:1fr 360px;
+    min-height:0;
+  }
+
+  /* ---------- Visor ---------- */
+  .viewer{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+    background:var(--bg);
+  }
+  .viewer-toolbar{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    padding:10px;
+    border-bottom:1px solid var(--border);
+    background:var(--surface);
+  }
+  .page-indicator{
+    font-size:13px;
+    color:var(--muted);
+    min-width:118px;
+    text-align:center;
+  }
+  .viewer-stage{
+    flex:1;
+    overflow:auto;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:28px;
+  }
+  .empty-state{
+    margin:auto;
+    max-width:360px;
+    text-align:center;
+    color:var(--muted);
+    padding:40px 20px;
+  }
+  .empty-state .empty-glyph{
+    font-size:34px;
+    margin-bottom:14px;
+  }
+  .empty-state h2{
+    font-family:var(--font-serif);
+    color:var(--ink);
+    font-size:19px;
+    font-weight:600;
+    margin:0 0 8px;
+  }
+  .empty-state p{
+    margin:0 0 18px;
+    font-size:14px;
+    line-height:1.5;
+  }
+
+  .page-frame{
+    position:relative;
+    box-shadow:var(--canvas-shadow);
+    border:1px solid var(--border);
+    background:#fff;
+    line-height:0;
+  }
+  .page-frame canvas{ display:block; }
+  .stamp-overlay{
+    position:absolute;
+    top:0; left:0;
+    pointer-events:none;
+  }
+
+  .stamp-el{
+    position:absolute;
+    pointer-events:auto;
+    touch-action:none;
+    border:1.5px dashed transparent;
+    cursor:grab;
+  }
+  .stamp-el:hover, .stamp-el.active{
+    border-color:var(--accent);
+  }
+  .stamp-el:active{ cursor:grabbing; }
+  .stamp-el img{
+    width:100%;
+    height:100%;
+    display:block;
+    user-select:none;
+    -webkit-user-drag:none;
+  }
+  .stamp-remove{
+    position:absolute;
+    top:-11px;
+    right:-11px;
+    width:22px;
+    height:22px;
+    border-radius:50%;
+    background:var(--danger);
+    color:#fff;
+    border:2px solid var(--surface);
+    font-size:13px;
+    line-height:1;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+  }
+  .stamp-el:hover .stamp-remove,
+  .stamp-el.active .stamp-remove{ display:flex; }
+  .stamp-resize{
+    position:absolute;
+    right:-6px;
+    bottom:-6px;
+    width:14px;
+    height:14px;
+    border-radius:3px;
+    background:var(--accent);
+    border:2px solid var(--surface);
+    cursor:nwse-resize;
+    display:none;
+  }
+  .stamp-el:hover .stamp-resize,
+  .stamp-el.active .stamp-resize{ display:block; }
+
+  /* ---------- Barra lateral ---------- */
+  .sidebar{
+    border-left:1px solid var(--border);
+    background:var(--surface);
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+  .sidebar-header{
+    padding:18px 20px 4px;
+  }
+  .sidebar-header h2{
+    font-family:var(--font-serif);
+    font-size:17px;
+    font-weight:600;
+    margin:0 0 3px;
+  }
+  .sidebar-header p{
+    margin:0;
+    font-size:13px;
+    color:var(--muted);
+    line-height:1.5;
+  }
+
+  .doctor-form{
+    margin:14px 20px 8px;
+    padding:14px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    background:var(--surface-2);
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+  }
+  .field-label{
+    font-size:12px;
+    font-weight:600;
+    color:var(--muted);
+  }
+  .doctor-form input[type="text"]{
+    width:100%;
+    padding:8px 10px;
+    border-radius:6px;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--ink);
+    font-size:14px;
+  }
+  .file-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 10px;
+    border-radius:6px;
+    border:1px dashed var(--border);
+    background:var(--surface);
+  }
+  .file-row input[type="file"]{
+    font-size:12.5px;
+    max-width:100%;
+    color:var(--muted);
+  }
+  .stamp-preview{
+    width:34px;
+    height:34px;
+    border-radius:5px;
+    border:1px solid var(--border);
+    object-fit:contain;
+    background:var(--surface);
+    flex-shrink:0;
+    display:none;
+  }
+
+  .doctor-list{
+    flex:1;
+    overflow-y:auto;
+    padding:4px 14px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .doctor-list-empty{
+    color:var(--muted);
+    font-size:13.5px;
+    padding:18px 4px;
+    text-align:center;
+    line-height:1.5;
+  }
+  .doctor-card{
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:7px 8px;
+    display:flex;
+    gap:8px;
+    align-items:center;
+    background:var(--surface);
+  }
+  .doctor-card.selected{ border-color:var(--accent); }
+  .doctor-seal{
+    width:32px;
+    height:32px;
+    border-radius:5px;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    object-fit:contain;
+    flex-shrink:0;
+    align-self:center;
+  }
+  .doctor-info{ flex:1; min-width:0; display:flex; align-items:center; gap:6px; }
+  .doctor-name{
+    flex:1;
+    min-width:0;
+    font-size:12.5px;
+    font-weight:600;
+    margin:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .doctor-actions{
+    display:flex;
+    gap:4px;
+    align-items:center;
+    flex-shrink:0;
+  }
+  .icon-btn{
+    width:24px;
+    height:24px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:var(--surface);
+    border:1px solid var(--border);
+    color:var(--muted);
+    font-size:12px;
+    padding:0;
+    border-radius:6px;
+    line-height:1;
+    flex-shrink:0;
+  }
+  .icon-btn:hover{ color:var(--ink); border-color:var(--accent); background:var(--surface-2); }
+  .icon-btn.icon-btn-accent{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:var(--accent-ink);
+  }
+  .icon-btn.icon-btn-accent:hover{ filter:brightness(1.06); }
+  .icon-btn.icon-btn-danger:hover{ color:var(--danger); border-color:var(--danger); background:var(--danger-soft); }
+
+  .doctor-card.editing{ align-items:flex-start; }
+  .doctor-edit-fields{
+    flex:1;
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .doctor-edit-fields input[type="text"]{
+    width:100%;
+    padding:7px 9px;
+    border-radius:6px;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--ink);
+    font-size:13.5px;
+  }
+  .doctor-edit-fields .file-row{ padding:6px 9px; }
+  .doctor-edit-fields .file-row input[type="file"]{ font-size:12px; }
+  .doctor-edit-actions{
+    display:flex;
+    gap:6px;
+    justify-content:flex-end;
+  }
+
+  .toast{
+    position:fixed;
+    bottom:22px;
+    left:50%;
+    transform:translateX(-50%) translateY(12px);
+    background:var(--ink);
+    color:var(--bg);
+    padding:10px 18px;
+    border-radius:8px;
+    font-size:13.5px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease;
+    z-index:50;
+    max-width:88vw;
+    text-align:center;
+  }
+  .toast.show{
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+  }
+
+  .sr-only{
+    position:absolute;
+    width:1px; height:1px;
+    padding:0; margin:-1px;
+    overflow:hidden;
+    clip:rect(0,0,0,0);
+    white-space:nowrap;
+    border:0;
+  }
+
+  /* ---------- Modo local ---------- */
+  .local-mode-banner{
+    background:var(--danger-soft);
+    color:var(--danger);
+    font-size:12.5px;
+    text-align:center;
+    padding:7px 14px;
+    border-bottom:1px solid var(--border);
+  }
+
+  /* ---------- Login ---------- */
+  .login-overlay{
+    position:fixed;
+    inset:0;
+    background:var(--bg);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    z-index:100;
+  }
+  .login-card{
+    width:100%;
+    max-width:340px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:26px 24px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .login-brand{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    margin-bottom:2px;
+  }
+  .login-brand .brand-mark{ font-size:24px; }
+  .login-sub{
+    margin:0 0 4px;
+    color:var(--muted);
+    font-size:13.5px;
+    line-height:1.5;
+  }
+  .login-card input[type="text"], .login-card input[type="password"]{
+    width:100%;
+    padding:9px 11px;
+    border-radius:7px;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--ink);
+    font-size:14px;
+  }
+  .login-error{
+    color:var(--danger);
+    background:var(--danger-soft);
+    border-radius:7px;
+    padding:8px 10px;
+    font-size:13px;
+  }
+  .seed-banner{
+    background:var(--accent-soft);
+    border:1px solid var(--accent);
+    border-radius:8px;
+    padding:10px 12px;
+    font-size:12.5px;
+    line-height:1.6;
+    color:var(--ink);
+  }
+  .seed-banner strong{ font-weight:700; }
+
+  /* ---------- Insignia de usuario ---------- */
+  .user-badge{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:5px 6px 5px 12px;
+    border:1px solid var(--border);
+    border-radius:20px;
+    background:var(--surface-2);
+  }
+  .user-badge-name{
+    font-size:13.5px;
+    font-weight:500;
+    max-width:130px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .role-pill{
+    font-size:11px;
+    font-weight:600;
+    padding:2px 8px;
+    border-radius:20px;
+    background:var(--accent-soft);
+    color:var(--accent);
+  }
+  .role-pill.root{ background:var(--danger-soft); color:var(--danger); }
+  .user-badge .icon-btn{
+    width:26px; height:26px;
+    border-radius:50%;
+    border:none;
+    background:transparent;
+  }
+  .user-badge .icon-btn:hover{ background:var(--surface); border-color:var(--border); }
+
+  /* ---------- Modal de usuarios ---------- */
+  .modal-backdrop{
+    position:fixed;
+    inset:0;
+    background:rgba(15,20,18,0.45);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    z-index:90;
+  }
+  .modal-card{
+    width:100%;
+    max-width:420px;
+    max-height:86vh;
+    overflow-y:auto;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:22px;
+  }
+  .modal-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:4px;
+  }
+  .modal-header h2{
+    font-family:var(--font-serif);
+    font-size:18px;
+    font-weight:600;
+    margin:0;
+  }
+  .modal-sub{
+    margin:0 0 14px;
+    color:var(--muted);
+    font-size:13px;
+    line-height:1.5;
+  }
+  .users-list{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .user-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:9px 10px;
+  }
+  .user-row-info{ flex:1; min-width:0; }
+  .user-row-name{
+    font-size:13.5px;
+    font-weight:600;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .user-row-username{
+    font-size:12px;
+    color:var(--muted);
+  }
+  .user-row-actions{
+    display:flex;
+    gap:5px;
+    flex-shrink:0;
+  }
+  .user-form{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    border-top:1px solid var(--border);
+    padding-top:14px;
+  }
+  .user-form input, .user-form select{
+    width:100%;
+    padding:8px 10px;
+    border-radius:6px;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--ink);
+    font-size:13.5px;
+  }
+
+  /* ---------- Auditoría ---------- */
+  .audit-list{
+    display:flex;
+    flex-direction:column;
+    gap:0;
+    max-height:56vh;
+    overflow-y:auto;
+    border:1px solid var(--border);
+    border-radius:8px;
+  }
+  .audit-row{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    padding:9px 12px;
+    border-bottom:1px solid var(--border);
+    font-size:12.5px;
+  }
+  .audit-row:last-child{ border-bottom:none; }
+  .audit-row-top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .audit-action{
+    font-weight:600;
+    font-size:13px;
+  }
+  .audit-time{
+    color:var(--muted);
+    font-size:11.5px;
+    white-space:nowrap;
+  }
+  .audit-meta{
+    color:var(--muted);
+  }
+  .audit-user{
+    font-weight:600;
+  }
+  .audit-role-tag{
+    font-size:10.5px;
+    padding:1px 6px;
+    border-radius:10px;
+    background:var(--surface-2);
+    margin-left:5px;
+  }
+  .audit-empty{
+    padding:20px;
+    text-align:center;
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  /* ---------- Dashboard ---------- */
+  .dash-stats{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .dash-stat-card{
+    border:1px solid var(--border);
+    border-radius:9px;
+    padding:11px 12px;
+    background:var(--surface-2);
+  }
+  .dash-stat-card.wide{ grid-column:1 / -1; }
+  .dash-stat-label{
+    font-size:11.5px;
+    color:var(--muted);
+    margin:0 0 3px;
+  }
+  .dash-stat-value{
+    font-family:var(--font-serif);
+    font-size:19px;
+    font-weight:600;
+    line-height:1.2;
+    margin:0;
+  }
+  .dash-stat-value small{
+    font-family:var(--font-sans);
+    font-size:12px;
+    font-weight:500;
+    color:var(--muted);
+  }
+  .dash-list-title{
+    font-size:12px;
+    font-weight:600;
+    color:var(--muted);
+    margin:0 0 8px;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+  }
+  .dash-list{
+    display:flex;
+    flex-direction:column;
+    gap:0;
+    max-height:38vh;
+    overflow-y:auto;
+    border:1px solid var(--border);
+    border-radius:8px;
+  }
+  .dash-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:8px 12px;
+    border-bottom:1px solid var(--border);
+    font-size:13px;
+  }
+  .dash-row:last-child{ border-bottom:none; }
+  .dash-row-seal{
+    width:24px;
+    height:24px;
+    border-radius:4px;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    object-fit:contain;
+    flex-shrink:0;
+  }
+  .dash-row-name{
+    flex:1;
+    min-width:0;
+    font-weight:600;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .dash-row-count{
+    color:var(--muted);
+    font-size:12.5px;
+    flex-shrink:0;
+  }
+  .dash-row.min .dash-row-count{ color:var(--danger); font-weight:600; }
+  .dash-row.max .dash-row-count{ color:var(--accent); font-weight:600; }
+
+  @media (max-width:860px){
+    main{
+      grid-template-columns:1fr;
+      grid-template-rows:auto auto;
+    }
+    .sidebar{
+      border-left:none;
+      border-top:1px solid var(--border);
+      max-height:46vh;
+    }
+    .viewer-stage{ padding:16px; }
+    header{ padding:12px 16px; }
+    .header-actions .btn span.full{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="login-overlay" id="loginOverlay" style="display:none;">
+  <form class="login-card" id="loginForm">
+    <div class="login-brand">
+      <span class="brand-mark">🩺</span>
+      <div class="brand-title">Sellado de documentos</div>
+    </div>
+    <p class="login-sub">Ingrese su usuario y contraseña para continuar.</p>
+    <div id="seedBanner" class="seed-banner" style="display:none;"></div>
+    <div>
+      <div class="field-label">Usuario</div>
+      <input type="text" id="loginUsername" autocomplete="username" required>
+    </div>
+    <div>
+      <div class="field-label">Contraseña</div>
+      <input type="password" id="loginPassword" autocomplete="current-password" required>
+    </div>
+    <div class="login-error" id="loginError" style="display:none;"></div>
+    <button type="submit" class="btn btn-primary btn-block">Iniciar sesión</button>
+  </form>
+</div>
+
+<div class="local-mode-banner" id="localModeBanner" style="display:none;">
+</div>
+
+<header style="display:none;">
+  <div class="brand">
+    <span class="brand-mark">🩺</span>
+    <div>
+      <div class="brand-title">Sellado de documentos</div>
+      <div class="brand-sub">Cargue un PDF y estampe el sello del médico</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <label class="btn" for="pdfInput">
+      <span>📄</span><span>Cargar PDF</span>
+    </label>
+    <input type="file" id="pdfInput" accept="application/pdf" class="sr-only">
+    <button class="btn btn-primary" id="downloadBtn" disabled>
+      <span>⬇</span><span>Descargar PDF</span>
+    </button>
+    <button class="btn btn-ghost" id="dashboardBtn" style="display:none;">
+      <span>📊</span><span>Dashboard</span>
+    </button>
+    <button class="btn btn-ghost" id="usersBtn" style="display:none;">
+      <span>👥</span><span>Usuarios</span>
+    </button>
+    <button class="btn btn-ghost" id="auditBtn" style="display:none;">
+      <span>📋</span><span>Auditoría</span>
+    </button>
+    <div class="user-badge" id="userBadge" style="display:none;">
+      <span class="user-badge-name" id="userBadgeName"></span>
+      <span class="role-pill" id="userBadgeRole"></span>
+      <button class="icon-btn" id="logoutBtn" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">⏻</button>
+    </div>
+  </div>
+</header>
+
+<div class="modal-backdrop" id="dashboardModalBackdrop" style="display:none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>Dashboard</h2>
+      <button class="icon-btn" id="closeDashboardModal" type="button" aria-label="Cerrar">✕</button>
+    </div>
+    <p class="modal-sub">Médicos registrados y veces que se ha colocado el sello de cada uno en un documento descargado.</p>
+    <div class="dash-stats" id="dashStats"></div>
+    <div class="dash-list-title">Uso por médico</div>
+    <div class="dash-list" id="dashList"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="usersModalBackdrop" style="display:none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>Usuarios</h2>
+      <button class="icon-btn" id="closeUsersModal" type="button" aria-label="Cerrar">✕</button>
+    </div>
+    <p class="modal-sub">Cree y administre las cuentas que pueden usar esta herramienta.</p>
+    <div class="users-list" id="usersList"></div>
+    <form class="user-form" id="userForm">
+      <div class="field-label">Nuevo usuario</div>
+      <input type="text" id="newUsername" placeholder="Usuario (sin espacios)" required>
+      <input type="text" id="newUserNombre" placeholder="Nombre completo" required>
+      <input type="password" id="newUserPassword" placeholder="Contraseña" required>
+      <select id="newUserRole">
+        <option value="user">Usuario</option>
+        <option value="root">Superusuario (root)</option>
+      </select>
+      <button type="submit" class="btn btn-primary btn-sm btn-block">Agregar usuario</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="auditModalBackdrop" style="display:none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2>Auditoría</h2>
+      <button class="icon-btn" id="closeAuditModal" type="button" aria-label="Cerrar">✕</button>
+    </div>
+    <p class="modal-sub">Registro de acciones de la herramienta. Se muestran los últimos 200 eventos, visible solo para superusuarios.</p>
+    <div class="audit-list" id="auditList"></div>
+  </div>
+</div>
+
+<main style="display:none;">
+  <section class="viewer">
+    <div class="viewer-toolbar" id="viewerToolbar" style="display:none;">
+      <button class="btn btn-sm btn-ghost" id="prevPageBtn">‹ Anterior</button>
+      <span class="page-indicator" id="pageIndicator">Página 1 de 1</span>
+      <button class="btn btn-sm btn-ghost" id="nextPageBtn">Siguiente ›</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-glyph">📄</div>
+        <h2>Ningún documento cargado</h2>
+        <p>Cargue el PDF que necesita firmar. Luego, agregue un médico en el panel derecho y coloque su sello sobre la firma.</p>
+        <label class="btn btn-primary" for="pdfInput">Cargar PDF</label>
+      </div>
+      <div class="page-frame" id="pageFrame" style="display:none;">
+        <canvas id="pdfCanvas"></canvas>
+        <div class="stamp-overlay" id="stampOverlay"></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h2>Médicos</h2>
+      <p>Cada médico guarda su nombre, número de registro y sello. Toque "Agregar sello" para colocarlo sobre el documento.</p>
+    </div>
+
+    <form class="doctor-form" id="doctorForm">
+      <div>
+        <div class="field-label">Nombre</div>
+        <input type="text" id="doctorName" placeholder="Dra. Ana Pérez" required>
+      </div>
+      <div>
+        <div class="field-label">Número de registro</div>
+        <input type="text" id="doctorReg" placeholder="RM 12345" required>
+      </div>
+      <div>
+        <div class="field-label">Imagen del sello</div>
+        <div class="file-row">
+          <img class="stamp-preview" id="stampPreview" alt="">
+          <input type="file" id="doctorStamp" accept="image/*" required>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block btn-sm">Agregar médico</button>
+    </form>
+
+    <div class="doctor-list" id="doctorList">
+      <div class="doctor-list-empty">Todavía no ha agregado médicos.</div>
+    </div>
+  </aside>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  const RENDER_SCALE = 1.5;
+
+  // ---------- Estado ----------
+  let originalArrayBuffer = null;
+  let originalFileName = "documento.pdf";
+  let pdfjsDocument = null;
+  let totalPages = 1;
+  let currentPageNum = 1;
+  let doctors = [];
+  let stamps = [];
+  let idCounter = 1;
+  function uid(prefix){
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return prefix + "_" + window.crypto.randomUUID();
+    }
+    idCounter++;
+    return prefix + "_" + Date.now().toString(36) + "_" + idCounter + "_" + Math.random().toString(36).slice(2, 8);
+  }
+
+  let claudeDb = null;
+  let claudeAssets = null;
+  let dbAvailable = false;
+  let currentUser = null; // { username, role, nombre }
+  let doctorsUnsub = null;
+  const SESSION_KEY = "sm_session_v1";
+
+  // ---------- Elementos ----------
+  const pdfInput = document.getElementById("pdfInput");
+  const downloadBtn = document.getElementById("downloadBtn");
+  const viewerToolbar = document.getElementById("viewerToolbar");
+  const viewerStage = document.getElementById("viewerStage");
+  const emptyState = document.getElementById("emptyState");
+  const pageFrame = document.getElementById("pageFrame");
+  const canvas = document.getElementById("pdfCanvas");
+  const overlay = document.getElementById("stampOverlay");
+  const prevPageBtn = document.getElementById("prevPageBtn");
+  const nextPageBtn = document.getElementById("nextPageBtn");
+  const pageIndicator = document.getElementById("pageIndicator");
+
+  const doctorForm = document.getElementById("doctorForm");
+  const doctorNameInput = document.getElementById("doctorName");
+  const doctorRegInput = document.getElementById("doctorReg");
+  const doctorStampInput = document.getElementById("doctorStamp");
+  const stampPreview = document.getElementById("stampPreview");
+  const doctorList = document.getElementById("doctorList");
+
+  const headerEl = document.querySelector("header");
+  const mainEl = document.querySelector("main");
+  const localModeBanner = document.getElementById("localModeBanner");
+  const loginOverlay = document.getElementById("loginOverlay");
+  const loginForm = document.getElementById("loginForm");
+  const loginUsername = document.getElementById("loginUsername");
+  const loginPassword = document.getElementById("loginPassword");
+  const loginError = document.getElementById("loginError");
+  const seedBanner = document.getElementById("seedBanner");
+  const userBadge = document.getElementById("userBadge");
+  const userBadgeName = document.getElementById("userBadgeName");
+  const userBadgeRole = document.getElementById("userBadgeRole");
+  const logoutBtn = document.getElementById("logoutBtn");
+  const usersBtn = document.getElementById("usersBtn");
+  const dashboardBtn = document.getElementById("dashboardBtn");
+  const dashboardModalBackdrop = document.getElementById("dashboardModalBackdrop");
+  const closeDashboardModal = document.getElementById("closeDashboardModal");
+  const dashStats = document.getElementById("dashStats");
+  const dashList = document.getElementById("dashList");
+  const usersModalBackdrop = document.getElementById("usersModalBackdrop");
+  const closeUsersModal = document.getElementById("closeUsersModal");
+  const usersList = document.getElementById("usersList");
+  const userForm = document.getElementById("userForm");
+  const newUsername = document.getElementById("newUsername");
+  const newUserNombre = document.getElementById("newUserNombre");
+  const newUserPassword = document.getElementById("newUserPassword");
+  const newUserRole = document.getElementById("newUserRole");
+  const auditBtn = document.getElementById("auditBtn");
+  const auditModalBackdrop = document.getElementById("auditModalBackdrop");
+  const closeAuditModal = document.getElementById("closeAuditModal");
+  const auditList = document.getElementById("auditList");
+
+  const toastEl = document.getElementById("toast");
+  let toastTimer = null;
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove("show"), 3200);
+  }
+
+  // ---------- Utilidades ----------
+  function dataUrlToUint8(dataUrl){
+    const base64 = dataUrl.split(",")[1];
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+  function dataUrlToBlob(dataUrl){
+    return new Blob([dataUrlToUint8(dataUrl)], { type: "image/png" });
+  }
+  function sanitizeUsername(raw){
+    return (raw || "").trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "");
+  }
+
+  // ---------- Respaldo con localStorage (cuando no hay conexión a Claude) ----------
+  const LS_USERS_KEY = "sm_local_users_v1";
+  const LS_DOCTORS_KEY = "sm_local_doctors_v1";
+  const LS_AUDIT_KEY = "sm_local_audit_v1";
+
+  function lsReadJSON(key, fallback){
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) { return fallback; }
+  }
+  function lsWriteJSON(key, value){
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { console.error(e); }
+  }
+  function localGetUsers(){ return lsReadJSON(LS_USERS_KEY, {}); }
+  function localSetUsers(map){ lsWriteJSON(LS_USERS_KEY, map); }
+  function localGetDoctors(){ return lsReadJSON(LS_DOCTORS_KEY, {}); }
+  function localSetDoctors(map){ lsWriteJSON(LS_DOCTORS_KEY, map); }
+  function localGetAudit(){ return lsReadJSON(LS_AUDIT_KEY, []); }
+  function localAddAudit(entry){
+    const arr = localGetAudit();
+    arr.unshift(entry);
+    if (arr.length > 200) arr.length = 200;
+    lsWriteJSON(LS_AUDIT_KEY, arr);
+  }
+
+  const LS_STAMP_EVENTS_KEY = "sm_local_stamp_events_v1";
+  function localGetStampEvents(){ return lsReadJSON(LS_STAMP_EVENTS_KEY, []); }
+  function localAddStampEvents(events){
+    const arr = localGetStampEvents();
+    events.forEach((e) => arr.push(e));
+    if (arr.length > 3000) arr.splice(0, arr.length - 3000);
+    lsWriteJSON(LS_STAMP_EVENTS_KEY, arr);
+  }
+
+  // ---------- Plataforma: sesión, usuarios y almacenamiento ----------
+  function showApp(){
+    loginOverlay.style.display = "none";
+    headerEl.style.display = "";
+    mainEl.style.display = "";
+  }
+
+  function updateUserBadge(){
+    if (!currentUser) { userBadge.style.display = "none"; usersBtn.style.display = "none"; auditBtn.style.display = "none"; dashboardBtn.style.display = "none"; return; }
+    userBadgeName.textContent = currentUser.nombre || currentUser.username;
+    userBadgeRole.textContent = currentUser.role === "root" ? "root" : "usuario";
+    userBadgeRole.className = "role-pill" + (currentUser.role === "root" ? " root" : "");
+    userBadge.style.display = "flex";
+    dashboardBtn.style.display = "inline-flex";
+    const isRoot = currentUser.role === "root";
+    usersBtn.style.display = isRoot ? "inline-flex" : "none";
+    auditBtn.style.display = isRoot ? "inline-flex" : "none";
+  }
+
+  async function logAudit(action, detail){
+    const entry = {
+      ts: new Date().toISOString(),
+      username: currentUser ? currentUser.username : "sistema",
+      role: currentUser ? currentUser.role : null,
+      action: action,
+      detail: detail || ""
+    };
+    try {
+      if (dbAvailable) {
+        await claudeDb.collection("audit").add(entry);
+      } else {
+        localAddAudit(entry);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  const DEFAULT_SEED_USERS = [
+    { username: "root", password: "root2026", role: "root", nombre: "Administrador" },
+    { username: "usuario1", password: "usuario1", role: "user", nombre: "Usuario 1" },
+    { username: "usuario2", password: "usuario2", role: "user", nombre: "Usuario 2" },
+    { username: "usuario3", password: "usuario3", role: "user", nombre: "Usuario 3" },
+    { username: "usuario4", password: "usuario4", role: "user", nombre: "Usuario 4" }
+  ];
+
+  async function ensureSeedUsers(){
+    if (dbAvailable) {
+      const snap = await claudeDb.collection("users").limit(1).get();
+      if (!snap.empty) return false;
+      for (const s of DEFAULT_SEED_USERS) {
+        await claudeDb.doc("users/" + s.username).set({
+          username: s.username, password: s.password, role: s.role, nombre: s.nombre,
+          createdAt: new Date().toISOString()
+        });
+      }
+      return true;
+    } else {
+      const map = localGetUsers();
+      if (Object.keys(map).length > 0) return false;
+      DEFAULT_SEED_USERS.forEach((s) => {
+        map[s.username] = {
+          username: s.username, password: s.password, role: s.role, nombre: s.nombre,
+          createdAt: new Date().toISOString()
+        };
+      });
+      localSetUsers(map);
+      return true;
+    }
+  }
+
+  function showSeedBanner(){
+    seedBanner.innerHTML =
+      "Se crearon las cuentas iniciales:<br>" +
+      "<strong>root</strong> / root2026 (superusuario)<br>" +
+      "<strong>usuario1</strong> a <strong>usuario4</strong>, contraseña igual al usuario.<br>" +
+      "Cámbielas apenas ingrese.";
+    seedBanner.style.display = "block";
+  }
+
+  async function tryRestoreSession(){
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch (e) { saved = null; }
+    if (!saved || !saved.username) return false;
+    if (dbAvailable) {
+      try {
+        const snap = await claudeDb.doc("users/" + saved.username).get();
+        if (!snap.exists) { localStorage.removeItem(SESSION_KEY); return false; }
+        const data = snap.data();
+        currentUser = { username: saved.username, role: data.role, nombre: data.nombre };
+        return true;
+      } catch (err) {
+        console.error(err);
+        return false;
+      }
+    } else {
+      const map = localGetUsers();
+      const data = map[saved.username];
+      if (!data) { localStorage.removeItem(SESSION_KEY); return false; }
+      currentUser = { username: saved.username, role: data.role, nombre: data.nombre };
+      return true;
+    }
+  }
+
+  loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    loginError.style.display = "none";
+    const u = sanitizeUsername(loginUsername.value);
+    const p = loginPassword.value;
+    if (!u || !p) {
+      loginError.textContent = "Ingrese usuario y contraseña.";
+      loginError.style.display = "block";
+      return;
+    }
+    const submitBtn = loginForm.querySelector("button[type=submit]");
+    submitBtn.disabled = true;
+    try {
+      let data = null;
+      if (dbAvailable) {
+        const snap = await claudeDb.doc("users/" + u).get();
+        data = snap.exists ? snap.data() : null;
+      } else {
+        const map = localGetUsers();
+        data = map[u] || null;
+      }
+      if (!data || data.password !== p) {
+        loginError.textContent = "Usuario o contraseña incorrectos.";
+        loginError.style.display = "block";
+        return;
+      }
+      currentUser = { username: u, role: data.role, nombre: data.nombre };
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ username: u }));
+      await enterApp();
+      logAudit("login", "");
+    } catch (err) {
+      console.error(err);
+      loginError.textContent = "No se pudo iniciar sesión. Intente de nuevo.";
+      loginError.style.display = "block";
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  logoutBtn.addEventListener("click", () => {
+    logAudit("logout", "");
+    localStorage.removeItem(SESSION_KEY);
+    currentUser = null;
+    if (doctorsUnsub) { doctorsUnsub(); doctorsUnsub = null; }
+    doctors = [];
+    stamps = [];
+    renderDoctorList();
+    headerEl.style.display = "none";
+    mainEl.style.display = "none";
+    loginUsername.value = "";
+    loginPassword.value = "";
+    loginError.style.display = "none";
+    seedBanner.style.display = "none";
+    loginOverlay.style.display = "flex";
+  });
+
+  async function enterApp(){
+    updateUserBadge();
+    showApp();
+    if (dbAvailable) {
+      subscribeDoctors();
+    } else {
+      loadLocalDoctors();
+    }
+  }
+
+  function loadLocalDoctors(){
+    const map = localGetDoctors();
+    doctors = Object.keys(map).map((id) => map[id]);
+    doctors.sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+    renderDoctorList();
+  }
+
+  function subscribeDoctors(){
+    if (doctorsUnsub) { doctorsUnsub(); doctorsUnsub = null; }
+    doctorsUnsub = claudeDb.collection("doctors").onSnapshot(
+      (snap) => {
+        doctors = snap.docs.map((d) => {
+          const v = d.data();
+          return {
+            id: d.id,
+            nombre: v.nombre,
+            registro: v.registro,
+            sealAssetId: v.sealAssetId,
+            sealSrc: "/_blob/" + v.sealAssetId,
+            naturalWidth: v.sealW,
+            naturalHeight: v.sealH
+          };
+        });
+        doctors.sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+        renderDoctorList();
+      },
+      (err) => {
+        console.error(err);
+        showToast("No se pudo sincronizar la lista de médicos.");
+      }
+    );
+  }
+
+  // ---------- Repositorio de médicos (base de datos o memoria local) ----------
+  async function addDoctorRepo(nombre, registro, file){
+    const img = await fileToStampImage(file);
+    if (dbAvailable) {
+      const blob = dataUrlToBlob(img.dataUrl);
+      const res = await claudeAssets.upload(blob, { type: "image/png" });
+      await claudeDb.collection("doctors").add({
+        nombre: nombre,
+        registro: registro,
+        sealAssetId: res.id,
+        sealW: img.width,
+        sealH: img.height,
+        createdAt: new Date().toISOString(),
+        createdBy: currentUser ? currentUser.username : null
+      });
+      logAudit("doctor_add", nombre);
+    } else {
+      const record = {
+        id: uid("doc"),
+        nombre: nombre,
+        registro: registro,
+        sealSrc: img.dataUrl,
+        naturalWidth: img.width,
+        naturalHeight: img.height,
+        createdAt: new Date().toISOString()
+      };
+      const map = localGetDoctors();
+      map[record.id] = record;
+      localSetDoctors(map);
+      logAudit("doctor_add", nombre);
+      loadLocalDoctors();
+    }
+  }
+
+  async function updateDoctorRepo(doc, nombre, registro, file){
+    let sealSrc = doc.sealSrc;
+    let sealAssetId = doc.sealAssetId;
+    let width = doc.naturalWidth;
+    let height = doc.naturalHeight;
+    if (file) {
+      const img = await fileToStampImage(file);
+      width = img.width;
+      height = img.height;
+      if (dbAvailable) {
+        const blob = dataUrlToBlob(img.dataUrl);
+        const res = await claudeAssets.upload(blob, { type: "image/png" });
+        sealAssetId = res.id;
+      } else {
+        sealSrc = img.dataUrl;
+      }
+    }
+    if (dbAvailable) {
+      const oldAssetId = doc.sealAssetId;
+      await claudeDb.doc("doctors/" + doc.id).update({
+        nombre: nombre, registro: registro, sealAssetId: sealAssetId, sealW: width, sealH: height
+      });
+      logAudit("doctor_update", nombre);
+      if (file && oldAssetId && oldAssetId !== sealAssetId) {
+        claudeAssets.delete(oldAssetId).catch(() => {});
+      }
+    } else {
+      doc.nombre = nombre;
+      doc.registro = registro;
+      doc.sealSrc = sealSrc;
+      doc.naturalWidth = width;
+      doc.naturalHeight = height;
+      const map = localGetDoctors();
+      map[doc.id] = {
+        id: doc.id, nombre: doc.nombre, registro: doc.registro, sealSrc: doc.sealSrc,
+        naturalWidth: doc.naturalWidth, naturalHeight: doc.naturalHeight,
+        createdAt: doc.createdAt || new Date().toISOString()
+      };
+      localSetDoctors(map);
+      logAudit("doctor_update", nombre);
+      loadLocalDoctors();
+    }
+  }
+
+  async function removeDoctorRepo(doc){
+    if (dbAvailable) {
+      await claudeDb.doc("doctors/" + doc.id).delete();
+      logAudit("doctor_delete", doc.nombre);
+      if (doc.sealAssetId) claudeAssets.delete(doc.sealAssetId).catch(() => {});
+    } else {
+      const map = localGetDoctors();
+      delete map[doc.id];
+      localSetDoctors(map);
+      logAudit("doctor_delete", doc.nombre);
+      loadLocalDoctors();
+    }
+  }
+
+  // ---------- Panel de usuarios (solo root) ----------
+  usersBtn.addEventListener("click", async () => {
+    usersModalBackdrop.style.display = "flex";
+    await loadUsersIntoModal();
+  });
+  closeUsersModal.addEventListener("click", () => { usersModalBackdrop.style.display = "none"; });
+  usersModalBackdrop.addEventListener("click", (e) => {
+    if (e.target === usersModalBackdrop) usersModalBackdrop.style.display = "none";
+  });
+
+  async function loadUsersIntoModal(){
+    usersList.innerHTML = "<div class=\"doctor-list-empty\">Cargando…</div>";
+    try {
+      let users;
+      if (dbAvailable) {
+        const snap = await claudeDb.collection("users").get();
+        users = snap.docs.map((d) => d.data());
+      } else {
+        const map = localGetUsers();
+        users = Object.keys(map).map((k) => map[k]);
+      }
+      users.sort((a, b) => a.username.localeCompare(b.username, "es"));
+      const rootCount = users.filter((u) => u.role === "root").length;
+      usersList.innerHTML = "";
+      users.forEach((u) => usersList.appendChild(buildUserRow(u, rootCount)));
+    } catch (err) {
+      console.error(err);
+      usersList.innerHTML = "<div class=\"doctor-list-empty\">No se pudo cargar la lista de usuarios.</div>";
+    }
+  }
+
+  function buildUserRow(u, rootCount){
+    const row = document.createElement("div");
+    row.className = "user-row";
+
+    const info = document.createElement("div");
+    info.className = "user-row-info";
+    const name = document.createElement("div");
+    name.className = "user-row-name";
+    name.textContent = u.nombre || u.username;
+    const uname = document.createElement("div");
+    uname.className = "user-row-username";
+    uname.textContent = "@" + u.username + " · " + (u.role === "root" ? "superusuario" : "usuario");
+    info.appendChild(name);
+    info.appendChild(uname);
+    row.appendChild(info);
+
+    const actions = document.createElement("div");
+    actions.className = "user-row-actions";
+
+    const resetBtn = document.createElement("button");
+    resetBtn.className = "icon-btn";
+    resetBtn.type = "button";
+    resetBtn.title = "Cambiar contraseña";
+    resetBtn.setAttribute("aria-label", "Cambiar contraseña");
+    resetBtn.textContent = "🔑";
+    resetBtn.addEventListener("click", async () => {
+      const nueva = window.prompt("Nueva contraseña para " + u.username + ":");
+      if (!nueva) return;
+      try {
+        if (dbAvailable) {
+          await claudeDb.doc("users/" + u.username).update({ password: nueva });
+        } else {
+          const map = localGetUsers();
+          if (map[u.username]) { map[u.username].password = nueva; localSetUsers(map); }
+        }
+        logAudit("user_password_reset", u.username);
+        showToast("Contraseña actualizada.");
+      } catch (err) {
+        console.error(err);
+        showToast("No se pudo actualizar la contraseña.");
+      }
+    });
+    actions.appendChild(resetBtn);
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "icon-btn icon-btn-danger";
+    delBtn.type = "button";
+    delBtn.title = "Eliminar usuario";
+    delBtn.setAttribute("aria-label", "Eliminar usuario");
+    delBtn.textContent = "🗑";
+    const isSelf = currentUser && currentUser.username === u.username;
+    const isLastRoot = u.role === "root" && rootCount <= 1;
+    if (isSelf || isLastRoot) {
+      delBtn.disabled = true;
+      delBtn.title = isSelf ? "No puede eliminar su propio usuario" : "Debe existir al menos un superusuario";
+    }
+    delBtn.addEventListener("click", async () => {
+      if (!window.confirm("¿Eliminar el usuario " + u.username + "?")) return;
+      try {
+        if (dbAvailable) {
+          await claudeDb.doc("users/" + u.username).delete();
+        } else {
+          const map = localGetUsers();
+          delete map[u.username];
+          localSetUsers(map);
+        }
+        logAudit("user_delete", u.username);
+        showToast("Usuario eliminado.");
+        await loadUsersIntoModal();
+      } catch (err) {
+        console.error(err);
+        showToast("No se pudo eliminar el usuario.");
+      }
+    });
+    actions.appendChild(delBtn);
+
+    row.appendChild(actions);
+    return row;
+  }
+
+  userForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const username = sanitizeUsername(newUsername.value);
+    const nombre = newUserNombre.value.trim();
+    const password = newUserPassword.value;
+    const role = newUserRole.value;
+    if (!username || !nombre || !password) {
+      showToast("Complete usuario, nombre y contraseña.");
+      return;
+    }
+    try {
+      if (dbAvailable) {
+        const existing = await claudeDb.doc("users/" + username).get();
+        if (existing.exists) {
+          showToast("Ese usuario ya existe.");
+          return;
+        }
+        await claudeDb.doc("users/" + username).set({
+          username: username, nombre: nombre, password: password, role: role,
+          createdAt: new Date().toISOString()
+        });
+      } else {
+        const map = localGetUsers();
+        if (map[username]) {
+          showToast("Ese usuario ya existe.");
+          return;
+        }
+        map[username] = { username: username, nombre: nombre, password: password, role: role, createdAt: new Date().toISOString() };
+        localSetUsers(map);
+      }
+      logAudit("user_add", username + " (" + role + ")");
+      userForm.reset();
+      showToast("Usuario agregado.");
+      await loadUsersIntoModal();
+    } catch (err) {
+      console.error(err);
+      showToast("No se pudo crear el usuario.");
+    }
+  });
+
+  // ---------- Panel de auditoría (solo root) ----------
+  const AUDIT_LABELS = {
+    login: "Inicio de sesión",
+    logout: "Cierre de sesión",
+    doctor_add: "Médico agregado",
+    doctor_update: "Médico editado",
+    doctor_delete: "Médico eliminado",
+    user_add: "Usuario creado",
+    user_password_reset: "Contraseña restablecida",
+    user_delete: "Usuario eliminado",
+    pdf_load: "PDF cargado",
+    pdf_download: "PDF descargado"
+  };
+
+  auditBtn.addEventListener("click", async () => {
+    if (!currentUser || currentUser.role !== "root") return;
+    auditModalBackdrop.style.display = "flex";
+    await loadAuditIntoModal();
+  });
+  closeAuditModal.addEventListener("click", () => { auditModalBackdrop.style.display = "none"; });
+  auditModalBackdrop.addEventListener("click", (e) => {
+    if (e.target === auditModalBackdrop) auditModalBackdrop.style.display = "none";
+  });
+
+  async function loadAuditIntoModal(){
+    auditList.innerHTML = "<div class=\"audit-empty\">Cargando…</div>";
+    try {
+      let entries;
+      if (dbAvailable) {
+        const snap = await claudeDb.collection("audit").orderBy("ts", "desc").limit(200).get();
+        entries = snap.docs.map((d) => d.data());
+      } else {
+        entries = localGetAudit();
+      }
+      if (entries.length === 0) {
+        auditList.innerHTML = "<div class=\"audit-empty\">Todavía no hay registros de auditoría.</div>";
+        return;
+      }
+      auditList.innerHTML = "";
+      entries.forEach((entry) => auditList.appendChild(buildAuditRow(entry)));
+    } catch (err) {
+      console.error(err);
+      auditList.innerHTML = "<div class=\"audit-empty\">No se pudo cargar la auditoría.</div>";
+    }
+  }
+
+  function buildAuditRow(entry){
+    const row = document.createElement("div");
+    row.className = "audit-row";
+
+    const top = document.createElement("div");
+    top.className = "audit-row-top";
+
+    const action = document.createElement("span");
+    action.className = "audit-action";
+    action.textContent = AUDIT_LABELS[entry.action] || entry.action;
+    top.appendChild(action);
+
+    const time = document.createElement("span");
+    time.className = "audit-time";
+    let when = entry.ts;
+    try { when = new Date(entry.ts).toLocaleString("es"); } catch (e) {}
+    time.textContent = when;
+    top.appendChild(time);
+
+    row.appendChild(top);
+
+    const meta = document.createElement("div");
+    meta.className = "audit-meta";
+    const userSpan = document.createElement("span");
+    userSpan.className = "audit-user";
+    userSpan.textContent = entry.username || "sistema";
+    meta.appendChild(userSpan);
+    if (entry.role) {
+      const roleTag = document.createElement("span");
+      roleTag.className = "audit-role-tag";
+      roleTag.textContent = entry.role;
+      meta.appendChild(roleTag);
+    }
+    if (entry.detail) {
+      meta.appendChild(document.createTextNode(" — " + entry.detail));
+    }
+    row.appendChild(meta);
+
+    return row;
+  }
+
+  // ---------- Uso de sellos (para el dashboard) ----------
+  async function logStampUsage(stampList, filename){
+    if (!stampList || stampList.length === 0) return;
+    const ts = new Date().toISOString();
+    const username = currentUser ? currentUser.username : "sistema";
+    const events = stampList.map((s) => ({
+      doctorId: s.doctorId || null,
+      doctorNombre: s.label || "",
+      filename: filename,
+      ts: ts,
+      username: username
+    }));
+    try {
+      if (dbAvailable) {
+        for (const ev of events) {
+          await claudeDb.collection("stamp_events").add(ev);
+        }
+      } else {
+        localAddStampEvents(events);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // ---------- Dashboard ----------
+  dashboardBtn.addEventListener("click", async () => {
+    dashboardModalBackdrop.style.display = "flex";
+    await loadDashboard();
+  });
+  closeDashboardModal.addEventListener("click", () => { dashboardModalBackdrop.style.display = "none"; });
+  dashboardModalBackdrop.addEventListener("click", (e) => {
+    if (e.target === dashboardModalBackdrop) dashboardModalBackdrop.style.display = "none";
+  });
+
+  async function loadDashboard(){
+    dashStats.innerHTML = "<div class=\"audit-empty\">Cargando…</div>";
+    dashList.innerHTML = "";
+    try {
+      let events;
+      if (dbAvailable) {
+        const snap = await claudeDb.collection("stamp_events").get();
+        events = snap.docs.map((d) => d.data());
+      } else {
+        events = localGetStampEvents();
+      }
+      const counts = {};
+      events.forEach((ev) => {
+        if (!ev.doctorId) return;
+        counts[ev.doctorId] = (counts[ev.doctorId] || 0) + 1;
+      });
+      renderDashboard(counts, events.length);
+    } catch (err) {
+      console.error(err);
+      dashStats.innerHTML = "<div class=\"audit-empty\">No se pudo cargar el dashboard.</div>";
+    }
+  }
+
+  function buildStatCard(label, value, sub){
+    const card = document.createElement("div");
+    card.className = "dash-stat-card";
+    const lab = document.createElement("p");
+    lab.className = "dash-stat-label";
+    lab.textContent = label;
+    card.appendChild(lab);
+    const val = document.createElement("p");
+    val.className = "dash-stat-value";
+    val.textContent = value;
+    if (sub) {
+      const small = document.createElement("small");
+      small.textContent = " — " + sub;
+      val.appendChild(small);
+    }
+    card.appendChild(val);
+    return card;
+  }
+
+  function renderDashboard(counts, totalEvents){
+    const rows = doctors.map((d) => ({ doctor: d, count: counts[d.id] || 0 }));
+    rows.sort((a, b) => b.count - a.count || a.doctor.nombre.localeCompare(b.doctor.nombre, "es"));
+
+    dashStats.innerHTML = "";
+    dashStats.appendChild(buildStatCard("Médicos registrados", String(doctors.length)));
+    dashStats.appendChild(buildStatCard("Sellos colocados en total", String(totalEvents)));
+
+    if (rows.length > 0) {
+      const maxRow = rows[0];
+      const minRow = rows[rows.length - 1];
+      dashStats.appendChild(buildStatCard("Médico con más uso", maxRow.doctor.nombre, maxRow.count + (maxRow.count === 1 ? " vez" : " veces")));
+      dashStats.appendChild(buildStatCard("Médico con menos uso", minRow.doctor.nombre, minRow.count + (minRow.count === 1 ? " vez" : " veces")));
+    }
+
+    if (rows.length === 0) {
+      dashList.innerHTML = "<div class=\"audit-empty\">Todavía no hay médicos registrados.</div>";
+      return;
+    }
+
+    const minCount = rows[rows.length - 1].count;
+    const maxCount = rows[0].count;
+
+    dashList.innerHTML = "";
+    rows.forEach((r) => {
+      const row = document.createElement("div");
+      row.className = "dash-row";
+      if (r.count === minCount) row.classList.add("min");
+      if (r.count === maxCount && maxCount > 0) row.classList.add("max");
+
+      const seal = document.createElement("img");
+      seal.className = "dash-row-seal";
+      seal.src = r.doctor.sealSrc;
+      seal.alt = "";
+      row.appendChild(seal);
+
+      const name = document.createElement("span");
+      name.className = "dash-row-name";
+      name.textContent = r.doctor.nombre;
+      row.appendChild(name);
+
+      const count = document.createElement("span");
+      count.className = "dash-row-count";
+      count.textContent = r.count + (r.count === 1 ? " vez" : " veces");
+      row.appendChild(count);
+
+      dashList.appendChild(row);
+    });
+  }
+
+  // ---------- Arranque ----------
+  async function initPlatform(){
+    if (window.claude && typeof window.claude.use === "function") {
+      try {
+        claudeDb = await window.claude.use("db");
+        claudeAssets = await window.claude.use("assets");
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    dbAvailable = !!(claudeDb && claudeAssets);
+    if (!dbAvailable) localModeBanner.style.display = "block";
+
+    try {
+      const justSeeded = await ensureSeedUsers();
+      const restored = await tryRestoreSession();
+      if (restored) {
+        await enterApp();
+      } else {
+        if (justSeeded) showSeedBanner();
+        loginOverlay.style.display = "flex";
+      }
+    } catch (err) {
+      console.error(err);
+      currentUser = null;
+      showApp();
+      renderDoctorList();
+    }
+  }
+
+  // ---------- Carga de PDF ----------
+  pdfInput.addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      showToast("Seleccione un archivo PDF válido.");
+      return;
+    }
+    try {
+      const buf = await file.arrayBuffer();
+      originalArrayBuffer = buf;
+      originalFileName = file.name || "documento.pdf";
+      stamps = [];
+
+      const loadingTask = pdfjsLib.getDocument({ data: buf.slice(0) });
+      pdfjsDocument = await loadingTask.promise;
+      totalPages = pdfjsDocument.numPages;
+      currentPageNum = 1;
+
+      emptyState.style.display = "none";
+      pageFrame.style.display = "block";
+      viewerToolbar.style.display = totalPages > 1 ? "flex" : "none";
+      downloadBtn.disabled = false;
+
+      await renderPage(currentPageNum);
+      logAudit("pdf_load", originalFileName);
+    } catch (err) {
+      console.error(err);
+      showToast("No se pudo abrir el PDF. Intente con otro archivo.");
+    } finally {
+      pdfInput.value = "";
+    }
+  });
+
+  async function renderPage(num){
+    const page = await pdfjsDocument.getPage(num);
+    const viewport = page.getViewport({ scale: RENDER_SCALE });
+    const dpr = window.devicePixelRatio || 1;
+
+    canvas.width = Math.floor(viewport.width * dpr);
+    canvas.height = Math.floor(viewport.height * dpr);
+    canvas.style.width = viewport.width + "px";
+    canvas.style.height = viewport.height + "px";
+    pageFrame.style.width = viewport.width + "px";
+    pageFrame.style.height = viewport.height + "px";
+    overlay.style.width = viewport.width + "px";
+    overlay.style.height = viewport.height + "px";
+
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    renderStampsOverlay();
+    updatePageIndicator();
+  }
+
+  function updatePageIndicator(){
+    pageIndicator.textContent = "Página " + currentPageNum + " de " + totalPages;
+    prevPageBtn.disabled = currentPageNum <= 1;
+    nextPageBtn.disabled = currentPageNum >= totalPages;
+  }
+
+  prevPageBtn.addEventListener("click", async () => {
+    if (currentPageNum > 1) { currentPageNum--; await renderPage(currentPageNum); }
+  });
+  nextPageBtn.addEventListener("click", async () => {
+    if (currentPageNum < totalPages) { currentPageNum++; await renderPage(currentPageNum); }
+  });
+
+  // ---------- Médicos ----------
+  function fileToStampImage(file){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const c = document.createElement("canvas");
+          c.width = img.naturalWidth;
+          c.height = img.naturalHeight;
+          c.getContext("2d").drawImage(img, 0, 0);
+          resolve({
+            dataUrl: c.toDataURL("image/png"),
+            width: img.naturalWidth,
+            height: img.naturalHeight
+          });
+        };
+        img.onerror = () => reject(new Error("No se pudo leer la imagen."));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error("No se pudo leer el archivo."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  doctorStampInput.addEventListener("change", () => {
+    const file = doctorStampInput.files && doctorStampInput.files[0];
+    if (!file) { stampPreview.style.display = "none"; return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      stampPreview.src = e.target.result;
+      stampPreview.style.display = "block";
+    };
+    reader.readAsDataURL(file);
+  });
+
+  doctorForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const nombre = doctorNameInput.value.trim();
+    const registro = doctorRegInput.value.trim();
+    const file = doctorStampInput.files && doctorStampInput.files[0];
+    if (!nombre || !registro || !file) {
+      showToast("Complete nombre, registro e imagen del sello.");
+      return;
+    }
+    const submitBtn = doctorForm.querySelector("button[type=submit]");
+    submitBtn.disabled = true;
+    try {
+      await addDoctorRepo(nombre, registro, file);
+      doctorForm.reset();
+      stampPreview.style.display = "none";
+      showToast("Médico agregado.");
+    } catch (err) {
+      console.error(err);
+      showToast("No se pudo guardar el médico.");
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  let editingDoctorId = null;
+
+  function renderDoctorList(){
+    doctorList.innerHTML = "";
+    if (doctors.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "doctor-list-empty";
+      empty.textContent = "Todavía no ha agregado médicos.";
+      doctorList.appendChild(empty);
+      return;
+    }
+    doctors.forEach((doc) => {
+      const card = editingDoctorId === doc.id ? buildDoctorEditCard(doc) : buildDoctorCard(doc);
+      doctorList.appendChild(card);
+    });
+  }
+
+  function buildDoctorCard(doc){
+    const card = document.createElement("div");
+    card.className = "doctor-card";
+
+    const seal = document.createElement("img");
+    seal.className = "doctor-seal";
+    seal.src = doc.sealSrc;
+    seal.alt = "Sello de " + doc.nombre;
+    card.appendChild(seal);
+
+    const info = document.createElement("div");
+    info.className = "doctor-info";
+
+    const name = document.createElement("p");
+    name.className = "doctor-name";
+    name.textContent = doc.nombre;
+    name.title = doc.nombre;
+    info.appendChild(name);
+
+    const actions = document.createElement("div");
+    actions.className = "doctor-actions";
+
+    const addBtn = document.createElement("button");
+    addBtn.className = "icon-btn icon-btn-accent";
+    addBtn.type = "button";
+    addBtn.title = "Agregar sello al documento";
+    addBtn.setAttribute("aria-label", "Agregar sello al documento");
+    addBtn.textContent = "✓";
+    addBtn.addEventListener("click", () => addStampForDoctor(doc));
+    actions.appendChild(addBtn);
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "icon-btn";
+    editBtn.type = "button";
+    editBtn.title = "Editar médico";
+    editBtn.setAttribute("aria-label", "Editar médico");
+    editBtn.textContent = "✎";
+    editBtn.addEventListener("click", () => {
+      editingDoctorId = doc.id;
+      renderDoctorList();
+    });
+    actions.appendChild(editBtn);
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "icon-btn icon-btn-danger";
+    delBtn.type = "button";
+    delBtn.title = "Eliminar médico";
+    delBtn.setAttribute("aria-label", "Eliminar médico");
+    delBtn.textContent = "🗑";
+    delBtn.addEventListener("click", async () => {
+      if (!window.confirm("¿Eliminar a " + doc.nombre + "? Esta acción no se puede deshacer.")) return;
+      delBtn.disabled = true;
+      try {
+        await removeDoctorRepo(doc);
+      } catch (err) {
+        console.error(err);
+        showToast("No se pudo eliminar el médico.");
+        delBtn.disabled = false;
+      }
+    });
+    actions.appendChild(delBtn);
+
+    info.appendChild(actions);
+    card.appendChild(info);
+    return card;
+  }
+
+  function buildDoctorEditCard(doc){
+    const card = document.createElement("div");
+    card.className = "doctor-card editing";
+
+    const seal = document.createElement("img");
+    seal.className = "doctor-seal";
+    seal.src = doc.sealSrc;
+    seal.alt = "Sello de " + doc.nombre;
+    card.appendChild(seal);
+
+    const fields = document.createElement("div");
+    fields.className = "doctor-edit-fields";
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.value = doc.nombre;
+    nameInput.placeholder = "Nombre";
+    fields.appendChild(nameInput);
+
+    const regInput = document.createElement("input");
+    regInput.type = "text";
+    regInput.value = doc.registro;
+    regInput.placeholder = "Número de registro";
+    fields.appendChild(regInput);
+
+    const fileRow = document.createElement("div");
+    fileRow.className = "file-row";
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileRow.appendChild(fileInput);
+    fields.appendChild(fileRow);
+
+    const editActions = document.createElement("div");
+    editActions.className = "doctor-edit-actions";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "icon-btn";
+    cancelBtn.type = "button";
+    cancelBtn.title = "Cancelar";
+    cancelBtn.setAttribute("aria-label", "Cancelar edición");
+    cancelBtn.textContent = "✕";
+    cancelBtn.addEventListener("click", () => {
+      editingDoctorId = null;
+      renderDoctorList();
+    });
+    editActions.appendChild(cancelBtn);
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "icon-btn icon-btn-accent";
+    saveBtn.type = "button";
+    saveBtn.title = "Guardar cambios";
+    saveBtn.setAttribute("aria-label", "Guardar cambios");
+    saveBtn.textContent = "✓";
+    saveBtn.addEventListener("click", async () => {
+      const nombre = nameInput.value.trim();
+      const registro = regInput.value.trim();
+      if (!nombre || !registro) {
+        showToast("Complete nombre y registro.");
+        return;
+      }
+      saveBtn.disabled = true;
+      try {
+        const newFile = fileInput.files && fileInput.files[0];
+        await updateDoctorRepo(doc, nombre, registro, newFile || null);
+        editingDoctorId = null;
+        renderDoctorList();
+        showToast("Médico actualizado.");
+      } catch (err) {
+        console.error(err);
+        showToast("No se pudo guardar los cambios.");
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+    editActions.appendChild(saveBtn);
+
+    fields.appendChild(editActions);
+    card.appendChild(fields);
+    return card;
+  }
+
+  // ---------- Colocación de sellos ----------
+  function addStampForDoctor(doc){
+    if (!pdfjsDocument) {
+      showToast("Cargue un PDF antes de agregar el sello.");
+      return;
+    }
+    const maxW = 170;
+    let width = doc.naturalWidth;
+    let height = doc.naturalHeight;
+    if (width > maxW) {
+      const ratio = maxW / width;
+      width = maxW;
+      height = height * ratio;
+    }
+    const stageW = parseFloat(overlay.style.width) || 400;
+    const stageH = parseFloat(overlay.style.height) || 500;
+    const onPage = stamps.filter(s => s.pageIndex === currentPageNum - 1).length;
+    const cascade = (onPage % 6) * 18;
+
+    let left = stageW / 2 - width / 2 + cascade;
+    let top = stageH / 2 - height / 2 + cascade;
+    left = Math.max(0, Math.min(left, stageW - width));
+    top = Math.max(0, Math.min(top, stageH - height));
+
+    stamps.push({
+      id: uid("stamp"),
+      doctorId: doc.id,
+      pageIndex: currentPageNum - 1,
+      leftPx: left,
+      topPx: top,
+      widthPx: width,
+      heightPx: height,
+      aspect: height / width,
+      sealSrc: doc.sealSrc,
+      label: doc.nombre
+    });
+
+    renderStampsOverlay();
+    showToast("Sello agregado. Arrástrelo sobre la firma.");
+  }
+
+  function renderStampsOverlay(){
+    overlay.innerHTML = "";
+    const pageStamps = stamps.filter(s => s.pageIndex === currentPageNum - 1);
+    pageStamps.forEach((stamp) => overlay.appendChild(buildStampElement(stamp)));
+  }
+
+  function buildStampElement(stamp){
+    const el = document.createElement("div");
+    el.className = "stamp-el";
+    el.style.left = stamp.leftPx + "px";
+    el.style.top = stamp.topPx + "px";
+    el.style.width = stamp.widthPx + "px";
+    el.style.height = stamp.heightPx + "px";
+    el.title = stamp.label || "";
+
+    const img = document.createElement("img");
+    img.src = stamp.sealSrc;
+    img.alt = "Sello";
+    img.draggable = false;
+    el.appendChild(img);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "stamp-remove";
+    removeBtn.type = "button";
+    removeBtn.setAttribute("aria-label", "Quitar sello");
+    removeBtn.textContent = "✕";
+    removeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    removeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      stamps = stamps.filter(s => s.id !== stamp.id);
+      renderStampsOverlay();
+    });
+    el.appendChild(removeBtn);
+
+    const resizeHandle = document.createElement("div");
+    resizeHandle.className = "stamp-resize";
+    el.appendChild(resizeHandle);
+
+    // Arrastrar
+    el.addEventListener("pointerdown", (e) => {
+      if (e.target === resizeHandle || e.target === removeBtn) return;
+      el.classList.add("active");
+      el.setPointerCapture(e.pointerId);
+      const startX = e.clientX, startY = e.clientY;
+      const startLeft = stamp.leftPx, startTop = stamp.topPx;
+      const stageW = parseFloat(overlay.style.width);
+      const stageH = parseFloat(overlay.style.height);
+
+      function onMove(ev){
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        let left = startLeft + dx;
+        let top = startTop + dy;
+        left = Math.max(0, Math.min(left, stageW - stamp.widthPx));
+        top = Math.max(0, Math.min(top, stageH - stamp.heightPx));
+        stamp.leftPx = left;
+        stamp.topPx = top;
+        el.style.left = left + "px";
+        el.style.top = top + "px";
+      }
+      function onUp(ev){
+        el.releasePointerCapture(e.pointerId);
+        el.removeEventListener("pointermove", onMove);
+        el.removeEventListener("pointerup", onUp);
+      }
+      el.addEventListener("pointermove", onMove);
+      el.addEventListener("pointerup", onUp);
+    });
+
+    // Redimensionar
+    resizeHandle.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      el.classList.add("active");
+      resizeHandle.setPointerCapture(e.pointerId);
+      const startX = e.clientX;
+      const startWidth = stamp.widthPx;
+      const stageW = parseFloat(overlay.style.width);
+      const stageH = parseFloat(overlay.style.height);
+
+      function onMove(ev){
+        const dx = ev.clientX - startX;
+        let newWidth = Math.max(30, startWidth + dx);
+        newWidth = Math.min(newWidth, stageW - stamp.leftPx);
+        let newHeight = newWidth * stamp.aspect;
+        if (stamp.topPx + newHeight > stageH) {
+          newHeight = stageH - stamp.topPx;
+          newWidth = newHeight / stamp.aspect;
+        }
+        stamp.widthPx = newWidth;
+        stamp.heightPx = newHeight;
+        el.style.width = newWidth + "px";
+        el.style.height = newHeight + "px";
+      }
+      function onUp(ev){
+        resizeHandle.releasePointerCapture(e.pointerId);
+        resizeHandle.removeEventListener("pointermove", onMove);
+        resizeHandle.removeEventListener("pointerup", onUp);
+      }
+      resizeHandle.addEventListener("pointermove", onMove);
+      resizeHandle.addEventListener("pointerup", onUp);
+    });
+
+    return el;
+  }
+
+  // ---------- Descarga ----------
+  async function sealBytes(sealSrc){
+    if (sealSrc.indexOf("data:") === 0) {
+      return dataUrlToUint8(sealSrc);
+    }
+    const resp = await fetch(sealSrc);
+    return new Uint8Array(await resp.arrayBuffer());
+  }
+
+  async function buildStampedPdfBytes(){
+    const pdfDoc = await PDFLib.PDFDocument.load(originalArrayBuffer.slice(0));
+    const pages = pdfDoc.getPages();
+    const embedCache = new Map();
+
+    for (const stamp of stamps) {
+      const page = pages[stamp.pageIndex];
+      if (!page) continue;
+
+      let embedded = embedCache.get(stamp.sealSrc);
+      if (!embedded) {
+        const bytes = await sealBytes(stamp.sealSrc);
+        embedded = await pdfDoc.embedPng(bytes);
+        embedCache.set(stamp.sealSrc, embedded);
+      }
+
+      const ptW = stamp.widthPx / RENDER_SCALE;
+      const ptH = stamp.heightPx / RENDER_SCALE;
+      const ptX = stamp.leftPx / RENDER_SCALE;
+      const pageHeightPt = page.getHeight();
+      const ptY = pageHeightPt - (stamp.topPx / RENDER_SCALE) - ptH;
+
+      page.drawImage(embedded, { x: ptX, y: ptY, width: ptW, height: ptH });
+    }
+
+    return await pdfDoc.save();
+  }
+
+  downloadBtn.addEventListener("click", async () => {
+    if (!originalArrayBuffer) return;
+    const originalLabel = downloadBtn.innerHTML;
+    downloadBtn.disabled = true;
+    downloadBtn.innerHTML = "<span>Generando…</span>";
+    try {
+      const outBytes = await buildStampedPdfBytes();
+      const blob = new Blob([outBytes], { type: "application/pdf" });
+      const baseName = originalFileName.replace(/\.pdf$/i, "") || "documento";
+      const filename = baseName + "-sellado.pdf";
+
+      let downloads = null;
+      if (window.claude && typeof window.claude.use === "function") {
+        downloads = await window.claude.use("downloads");
+      }
+
+      if (downloads) {
+        try {
+          await downloads.save({ filename: filename, data: blob });
+          logAudit("pdf_download", filename + " (" + stamps.length + " sello/s)");
+          logStampUsage(stamps, filename);
+          showToast("PDF guardado.");
+        } catch (err) {
+          const code = err && err.code;
+          if (code === "declined") {
+            // el usuario canceló, no hacer nada
+          } else if (code === "too_large") {
+            showToast("El PDF es demasiado grande para guardarlo aquí.");
+          } else {
+            showToast("No se pudo guardar el PDF. Intente de nuevo.");
+          }
+        }
+      } else {
+        // Descarga nativa del navegador (cuando la página se aloja fuera de Claude)
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        logAudit("pdf_download", filename + " (" + stamps.length + " sello/s)");
+        logStampUsage(stamps, filename);
+        showToast("PDF descargado.");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("No se pudo generar el PDF con los sellos.");
+    } finally {
+      downloadBtn.disabled = false;
+      downloadBtn.innerHTML = originalLabel;
+    }
+  });
+
+  initPlatform();
+})();
+</script>
+</body>
+</html>
